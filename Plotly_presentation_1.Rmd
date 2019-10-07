@@ -1,0 +1,157 @@
+---
+title: "R Markdown Presentation & Plotly"
+author: "Nadia Stavisky"
+date: "10/5/2019"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      message = FALSE,
+                      warning = FALSE,
+                      cache = FALSE,
+                      tidy = TRUE,
+                      tidy.opts = list(width.cutoff = 60))
+
+#load libraries
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(knitr)
+```
+
+## Goals: 
+
+- **1.** Create a web page presentation using R Markdown that features a plot created with Plotly
+- **2.** Host the webpage on either GitHub Pages, RPubs, or NeoCities
+- **3.** Your webpage must contain the date that you created the document, and it must contain a plot created with Plotly
+
+## Data set:
+For this project we will use state.x77 data - a matrix with 50 rows and 8 columns giving the following statistics in the respective columns.
+
+- **Population** - population estimate as of July 1, 1975
+- **Income** - per capita income (1974)
+- **Illiteracy** - illiteracy (1970, percent of population)
+- **Life Exp** - life expectancy in years (1969–71)
+- **Murder** - murder and non-negligent manslaughter rate per 100,000 population (1976)
+- **HS Grad** - percent high-school graduates (1970)
+- **Frost** - mean number of days with minimum temperature below freezing (1931–1960) in capital or large city
+
+## Data processing
+```{r data_processing}
+#load data
+#data(state.x77)
+#convert into data frame
+State <- state.abb
+state_data <- as.data.frame(cbind(state.abb,state.x77))
+#names(state_data)
+num_col <- c("Population", "Income", "Illiteracy", "Life Exp", "Murder", "HS Grad", "Frost", "Area")
+state_data[num_col] <- sapply(sapply(state_data[num_col],as.character), as.numeric)
+#str(state_data)
+summary(state_data[, -1])
+```
+## Correlation matrix with significance levels (p-value) 
+Correlation coefficients with significance test:
+```{r corr_coef}
+# install and load required libraries
+#install.packages("Hmisc")
+library(Hmisc)
+library(ggcorrplot)
+# Compute a correlation matrix
+data(state_data)
+corr <- rcorr(as.matrix(state_data[,-1]))
+ggcorr <- ggcorrplot(corr$r, hc.order = TRUE, type = "lower", p.mat = corr$P)
+ggplotly(ggcorr)
+
+```
+
+## Illiteracy correlations:
+```{r top_3_corr}
+flattenCorrMatrix <- function(cormat, pmat) {
+  ut <- upper.tri(cormat)
+  data.frame(
+    row = rownames(cormat)[row(cormat)[ut]],
+    column = rownames(cormat)[col(cormat)[ut]],
+    cor  =(cormat)[ut],
+    p = pmat[ut]
+    )
+}
+corr_data <- flattenCorrMatrix(corr$r, corr$P)
+corr_data_top <- corr_data %>%
+  arrange(p) %>%
+  filter(row == "Illiteracy")
+kable(corr_data_top, format = "pandoc", caption = "Correlation of population Illiterracy with other variables")
+```
+
+## Scatterplot Graph 
+It is clearly visible that the urder rate grow with population illiteracy.
+```{r simple_plot}
+plot_ly(x = state_data$Illiteracy, y = state_data$Murder, type = "scatter", mode = "markers",
+        marker = list(size = 10,
+                       color = 'rgba(255, 182, 193, .9)',
+                       line = list(color = 'rgba(152, 0, 0, .8)',
+                                   width = 2))) %>%
+  layout(title = 'Illiteracy (1970, percent of population) vs murder rate per 100,000 population', 
+         xaxis = list(title = 'Illiteracy, %'), 
+         yaxis = list(title = 'Murder rate'))
+```
+
+
+## Scatterplot with color 
+States with more cold days per year have higher % of HS Grads and lower Illiteracy ratio.
+```{r color_plot}
+#create hover text
+state_data$hover <- with(state_data, paste(state.abb,'<br>', "Illiteracy: ", Illiteracy, '<br>', "Annual Frost days: ", Frost, '<br>', "HS Grads %: ", `HS Grad`))
+plot_ly( x = state_data$Illiteracy, y = state_data$`HS Grad`, mode = "markers", 
+         text = state_data$hover,
+         marker = list(size = 20,
+                       color=state_data$Frost,
+                       colorbar=list(title='Frost days'),
+                       colorscale='Viridis',
+                       reversescale =T,
+                       line = list(color = 'rgba(152, 0, 0, .8)',width = 2)
+                       )) %>%
+layout(title = 'Cold weather effect on HS Grads and Illiteracy ratios (% of the 1970 population)', 
+       xaxis = list(title = 'Illiteracy ratio'), 
+       yaxis = list(title = 'HS Grads ratio'))
+```
+
+## Choropleth Maps | Most South states have highest illiteracy ratio.
+```{r map}
+borders <- list(color = toRGB("red"))
+#Set up some mapping options
+map_options <- list(
+  scope = 'usa',
+  projection = list(type = 'albers usa'),
+  showlakes = TRUE,
+  lakecolor = toRGB("white")
+)
+
+plot_ly(state_data, z = state_data$Illiteracy, text = state_data$hover, locations = state_data$state.abb,
+        type = 'choropleth', locationmode = 'USA-states',
+        color = state_data$Illiteracy, colors = 'Blues', marker = list(line = borders)) %>%
+  layout(title = 'US Illiteracy ratio in 1970', geo = map_options)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
